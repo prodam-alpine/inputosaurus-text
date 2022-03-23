@@ -1,26 +1,26 @@
 /**
  * Inputosaurus Text 
  *
- * Must be instantiated on an <input> element
+ * Must be instantiated on the parent of an <input> element
  * Allows multiple input items. Each item is represented with a removable tag that appears to be inside the input area.
  *
  * @requires:
  *
- * 	jQuery 1.7+
- * 	jQueryUI 1.8+ Core
+ * 	jQuery 1.9+
+ * 	jQueryUI 1.11+ Core
  *
- * @version 0.1.6
+ * @version 0.1.7
  * @author Dan Kielp <dan@sproutsocial.com>
  * @created October 3,2012
  *
  */
 
 
-(function($) {
+ (function($) {
 
 	var inputosaurustext = {
 
-		version: "0.1.6",
+		version: "0.1.7",
 
 		eventprefix: "inputosaurus",
 
@@ -65,10 +65,11 @@
 		},
 
 		_create: function() {
+			this.inputElement = this.element.children('input');
 			var widget = this,
 				els = {},
 				o = widget.options,
-				placeholder =  o.placeholder || this.element.attr('placeholder') || null;
+				placeholder =  o.placeholder || this.inputElement.attr('placeholder') || null;
 				
 			this._chosenValues = [];
 
@@ -88,8 +89,8 @@
 			}
 
 			o.wrapperElement && o.wrapperElement.append(els.ul);
-			this.element.replaceWith(o.wrapperElement || els.ul);
-			els.origInputCont.append(this.element).hide();
+			this.inputElement.replaceWith(o.wrapperElement || els.ul);
+			els.origInputCont.append(this.inputElement).hide();
 			
 			els.inputCont.append(els.input);
 			els.ul.append(els.inputCont);
@@ -102,8 +103,8 @@
 			widget._attachEvents();
 
 			// if instantiated input already contains a value, parse that junk
-			if($.trim(this.element.val())){
-				els.input.val( this.element.val() );
+			if($.trim(this.inputElement.val())){
+				els.input.val( this.inputElement.val() );
 				this.parseInput();
 			}
 
@@ -114,7 +115,7 @@
 			if(this.options.autoCompleteSource){
 				var widget = this;
 
-				this.elements.input.autocomplete({
+				var autocompleteObj = this.elements.input.autocomplete({
 					position : {
 						of : this.elements.ul
 					},
@@ -127,7 +128,7 @@
 					},
 					open : function() {
 						// Older versions of jQueryUI have a different namespace
-						var auto =  $(this).data('ui-autocomplete') || $(this).data('autocomplete');
+						var auto =  $(this).data('uiAutocomplete') || $(this).data('autocomplete');
 						var menu = auto.menu,
 							$menuItems;
 						
@@ -141,7 +142,7 @@
 							$menuItems = menu.element.find('li');
 
 							// activate single item to allow selection upon pressing 'Enter'
-							if($menuItems.size() === 1){
+							if ($menuItems.length === 1) {
 								menu[menu.activate ? 'activate' : 'focus']($.Event('click'), $menuItems);
 							}
 						}
@@ -153,7 +154,7 @@
 		_autoCompleteMenuPosition : function() {
 			var widget;
 			if(this.options.autoCompleteSource){
-				widget = this.elements.input.data('ui-autocomplete') || this.elements.input.data('autocomplete');
+				widget = this.elements.input.data('uiAutocomplete') || this.elements.input.data('autocomplete');
 				widget && widget.menu.element.position({
 					of: this.elements.ul,
 					my: 'left top',
@@ -181,12 +182,14 @@
 
 			if(delimiterFound !== false){
 				values = val.split(delimiterFound);
-			} else if(!ev || ev.which === $.ui.keyCode.ENTER && !$('.ui-menu-item.ui-state-focus').size() && !$('.ui-menu-item .ui-state-focus').size() && !$('#ui-active-menuitem').size()){
+			} else if(!ev || ev.which === $.ui.keyCode.ENTER && !$('.ui-menu-item.ui-state-focus').length && !$('.ui-menu-item .ui-state-focus').length && !$('#ui-active-menuitem').length){
 				values.push(val);
 				ev && ev.preventDefault();
-
+			} else if(ev.type=="change" || (ev.type=='keydown' && ev.which==$.ui.keyCode.TAB)) {
+				values.push(val);
+				ev && ev.preventDefault();
 			// prevent autoComplete menu click from causing a false 'blur'
-			} else if(ev.type === 'blur' && !$('#ui-active-menuitem').size()){
+			} else if(ev.type === 'blur' && !$('#ui-active-menuitem').length){
 				values.push(val);
 			}
 
@@ -215,6 +218,7 @@
 			switch(ev.which){
 				case $.ui.keyCode.BACKSPACE:
 					ev.type === 'keydown' && widget._inputBackspace(ev);
+					widget._resizeInput(ev);
 					break;
 
 				case $.ui.keyCode.LEFT:
@@ -239,7 +243,17 @@
 				val = widget.elements.input.val(),
 				txtWidth = 25 + val.length * 8;
 
-			widget.elements.input.width(txtWidth < maxWidth ? txtWidth : maxWidth);
+			lastTag = widget.elements.ul.find('li:not(.inputosaurus-required):last');
+
+			// clear width to show help text or adjust to typed text
+			if (ev && $(ev.currentTarget).val() == '' && lastTag.length < 1)
+			{
+				widget.elements.input.css('width','');
+			}
+			else
+			{
+				widget.elements.input.width(txtWidth < maxWidth ? txtWidth : maxWidth);
+			}
 		},
 		
 		// resets placeholder on representative input
@@ -247,7 +261,7 @@
 			var placeholder = this.options.placeholder,
 				input = this.elements.input,
 				width = this.options.width || 'inherit';
-			if (placeholder && this.element.val().length === 0) {
+			if (placeholder && this.inputElement.val().length === 0) {
 				input.attr('placeholder', placeholder).css('min-width', width - 50)
 			}else {
 				input.attr('placeholder', '').css('min-width', 'inherit')
@@ -262,7 +276,7 @@
 			// IE goes back in history if the event isn't stopped
 			ev.stopPropagation();
 
-			if((!$(ev.currentTarget).val() || (('selectionStart' in ev.currentTarget) && ev.currentTarget.selectionStart === 0 && ev.currentTarget.selectionEnd === 0)) && lastTag.size()){
+			if ((!$(ev.currentTarget).val() || (('selectionStart' in ev.currentTarget) && ev.currentTarget.selectionStart === 0 && ev.currentTarget.selectionEnd === 0)) && lastTag.length) {
 				ev.preventDefault();
 				lastTag.find('a').focus();
 			}
@@ -409,10 +423,10 @@
 		},
 
 		_setValue : function(value) {
-			var val = this.element.val();
+			var val = this.inputElement.val();
 
 			if(val !== value){
-				this.element.val(value);
+				this.inputElement.val(value);
 				this._trigger('change');
 			}
 		},
@@ -475,7 +489,7 @@
 
 		refresh : function() {
 			var delim = this.options.outputDelimiter,
-				val = this.element.val(),
+				val = this.inputElement.val(),
 				values = [];
 			
 			values.push(val);
@@ -513,11 +527,10 @@
 		_destroy: function() {
 			this.elements.input.unbind('.inputosaurus');
 
-			this.elements.ul.replaceWith(this.element);
+			this.elements.ul.replaceWith(this.inputElement);
 
 		}
 	};
 
 	$.widget("ui.inputosaurus", inputosaurustext);
 })(jQuery);
-
